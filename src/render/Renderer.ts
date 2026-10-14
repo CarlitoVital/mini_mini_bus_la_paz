@@ -1,6 +1,9 @@
+import type { RoadNetwork } from '../roads/RoadNetwork';
+import type { RoadTool } from '../roads/RoadTool';
 import type { Topography } from '../terrain/Topography';
 import type { Camera } from './Camera';
 import { COLORS } from './palette';
+import { RoadRenderer } from './RoadRenderer';
 import { TerrainRenderer } from './TerrainRenderer';
 
 export interface RenderState {
@@ -11,20 +14,25 @@ export interface RenderState {
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private terrain: TerrainRenderer;
+  private readonly roads: RoadRenderer;
   private dpr = 1;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private topo: Topography,
     private readonly camera: Camera,
+    net: RoadNetwork,
+    private readonly tool: RoadTool,
   ) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
     this.terrain = new TerrainRenderer(topo);
+    this.roads = new RoadRenderer(net, topo);
   }
 
   setTopography(topo: Topography): void {
     this.topo = topo;
     this.terrain = new TerrainRenderer(topo);
+    this.roads.setTopography(topo);
   }
 
   resize(): void {
@@ -55,7 +63,9 @@ export class Renderer {
 
     this.terrain.draw(ctx, camera.zoom);
     this.drawGrid();
-    if (state.hoverCell) this.drawHoverCell(state.hoverCell.cx, state.hoverCell.cy);
+    if (state.hoverCell && !this.tool.isActive) this.drawHoverCell(state.hoverCell.cx, state.hoverCell.cy);
+    this.roads.draw(ctx, camera.zoom);
+    this.roads.drawPreview(ctx, this.tool, camera.zoom);
 
     ctx.strokeStyle = COLORS.mapEdge;
     ctx.lineWidth = 1 / camera.zoom;

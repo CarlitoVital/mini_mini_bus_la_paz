@@ -37,27 +37,21 @@ export class Topography {
   /** Verlauf des Río Choqueyapu in Weltkoordinaten (Nord → Süd). */
   readonly river: Vec2[];
 
+  /** y-Positionen (Welt) der Rampas, an denen die Ceja per Serpentine befahrbar ist. */
+  readonly passY: number[];
+
   constructor(readonly seed: number) {
     const gen = new LaPazGenerator(seed, WORLD_WIDTH / WORLD_HEIGHT);
     this.heights = new Float32Array(this.sw * this.sh);
 
-    let min = Infinity;
-    let max = -Infinity;
     for (let sy = 0; sy < this.sh; sy++) {
       const v = sy / (this.sh - 1);
       for (let sx = 0; sx < this.sw; sx++) {
-        const e = gen.sample(sx / (this.sw - 1), v);
-        this.heights[sy * this.sw + sx] = e;
-        if (e < min) min = e;
-        if (e > max) max = e;
+        this.heights[sy * this.sw + sx] = gen.sample(sx / (this.sw - 1), v);
       }
     }
-    // Auf den vollen Bereich 0..1 (3.200 – 4.150 m) normieren.
-    const range = max - min || 1;
-    for (let i = 0; i < this.heights.length; i++) {
-      this.heights[i] = (this.heights[i] - min) / range;
-    }
 
+    this.passY = gen.passes.map((v) => v * WORLD_HEIGHT);
     this.river = [];
     for (let i = 0; i <= 80; i++) {
       const v = i / 80;
@@ -126,7 +120,7 @@ export class Topography {
 
     if (u < riverX) {
       if (e > 0.8 && grade < 0.12) return 'El Alto';
-      if (e > 0.62) return 'La Ceja';
+      if (e > 0.6 && grade > 0.22) return 'La Ceja';
     }
     if (e < 0.25 && v > 0.55) return 'Zona Sur';
     if (Math.abs(u - riverX) < 0.07 && v < 0.62) return 'Centro';

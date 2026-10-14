@@ -15,14 +15,31 @@ npm test           # Unit-Tests (Vitest)
 
 `?seed=1234` in der URL wählt eine bestimmte Karte; Taste **N** erzeugt eine neue.
 
-## Steuerung (Phase 1)
+## Steuerung
 
 | Eingabe | Aktion |
 | --- | --- |
+| Linksklick + Ziehen | Straße bauen (Live-Steigungsanzeige grün/gelb/rot) |
+| Rechtsklick + Ziehen | Straße abreißen |
+| Strg+Z | Letzten Strich rückgängig |
 | Mausrad | Zoom zum Cursor |
 | Mittlere Maustaste / Leertaste + Ziehen | Kamera verschieben |
 | WASD / Pfeiltasten, `+` / `-` | Kamera bewegen / zoomen |
-| Hover | Höhe ü. NN, Geländeneigung, Stadtteil |
+| Hover | Höhe ü. NN, Geländeneigung, Stadtteil; über Straßen deren Steigung |
+
+## Straßenbau & Steigungslimit
+
+Jedes Segment zwischen zwei benachbarten Zellen (8er-Nachbarschaft) wird beim Ziehen geprüft:
+`slope = |Höhe(B) − Höhe(A)| / Distanz(A, B)` in realen Metern. Über `MAX_ALLOWED_SLOPE = 0.15` (15 %)
+wird nicht gebaut: der Bau stoppt an der letzten gültigen Zelle, eine rote Geister-Straße mit ✕ und
+der Hinweis „Zu steil! Serpentine nötig" erscheinen. Ampelpunkte um den Anker zeigen, in welche
+Richtungen der nächste Schritt möglich ist. Ein Diagonalschritt hat nur ~71 % der Steigung eines
+Schritts in Falllinie – Zickzack-Serpentinen bezwingen so Hänge bis ~21 %.
+
+Die Ceja (Abbruchkante von El Alto) ist mit ~60 % Gefälle eine geschlossene Wand. Nur an drei
+seed-abhängigen **Rampas** flacht sie auf ~18 % ab – dort führt der Weg aufs Plateau nur über
+Serpentinen. Straßen werden als quadratische Bezier-Kurven durch die Zellmittelpunkte gezeichnet;
+Pfeile auf der Fahrbahn zeigen bergauf (doppelt bei steilen Abschnitten).
 
 ## Projektstruktur
 
@@ -41,28 +58,35 @@ src/
 │   └── contours.ts           Marching Squares → verkettete Isolinien + Chaikin-Glättung
 ├── render/
 │   ├── Camera.ts             Pan/Zoom, Welt↔Bildschirm
-│   ├── Renderer.ts           HiDPI-Canvas, Ebenen: Gelände, Gitter, Hover-Zelle
+│   ├── Renderer.ts           HiDPI-Canvas, Ebenen: Gelände, Gitter, Hover-Zelle, Straßen
+│   ├── RoadRenderer.ts       Bezier-Straßen, Bergauf-Pfeile, Bau-Vorschau (Ampel, rote Sperre)
 │   ├── TerrainRenderer.ts    Höhenband-Bitmap + Höhenlinien als Vektorpfade + Beschriftung + Fluss
 │   └── palette.ts            Hypsometrische Farbskala & UI-Farben
+├── roads/
+│   ├── RoadNetwork.ts        Ungerichteter Graph über dem Gitter, Diagonal-Kreuzungsregel, Linienrasterung
+│   ├── RoadRules.ts          Steigungsberechnung, MAX_ALLOWED_SLOPE-Prüfung, Ampel-Einstufung
+│   └── RoadTool.ts           Drag-and-Drop-Bau, Abriss, Undo
 ├── input/
-│   └── InputController.ts    Maus/Tastatur → Kamera (Links/Rechts reserviert für Bau/Abriss)
+│   └── InputController.ts    Maus/Tastatur → Kamera; Links/Rechts → Straßenwerkzeug
 └── ui/
     ├── Legend.ts             Höhenlegende
     └── Tooltip.ts            Höhen-Tooltip („3.640 m ü. NN“)
 tests/
-└── topography.test.ts        Invarianten der Topografie, Noise-Determinismus, Marching Squares
+├── topography.test.ts        Invarianten der Topografie, Noise-Determinismus, Marching Squares
+└── roads.test.ts             Graph, Steigungsregel, Werkzeug, Erreichbarkeit El Altos nur über Rampas
 ```
 
 ## Topografie-Modell
 
 Normierte Höhe `0.0` = Zona Sur (3.200 m), `1.0` = El Alto (4.150 m); eine Zelle entspricht 150 m.
 Die Höhenfunktion setzt sich zusammen aus einer Talachse (Río Choqueyapu, von Nord nach Südost
-abfallend), einem konkaven Hangprofil mit steiler Abbruchkante zum Plateau („La Ceja“), ansteigenden
-Osthügeln, Ridged-Noise-Quebradas an den Hängen und feinem fBm-Relief.
+abfallend), Laderas mit ~10 % mittlerem Gefälle, der Ceja-Steilwand (~60 %, an Rampas ~18 %),
+Osthügeln mit ~8–13 %, Ridged-Noise-Quebradas an den Hängen und feinem fBm-Relief. Die Hangbreiten
+werden aus Ziel-Gefällen berechnet, damit das Steigungslimit planbar greift.
 
 ## Roadmap
 
 1. ✅ Setup & Topografie (Höhengenerator, Isohypsen, Höhen-Tooltip)
-2. Straßenbau mit Steigungslimit (`MAX_ALLOWED_SLOPE`), „Zu steil!“-Feedback, Bezier-Serpentinen
+2. ✅ Straßenbau mit Steigungslimit (`MAX_ALLOWED_SLOPE`), „Zu steil!“-Feedback, Bezier-Serpentinen
 3. Minibusse, A* nach Fahrzeit, Bergauf-Physik (`UPHILL_PENALTY_FACTOR`), Rückstau
 4. Ressourcen & Wochen-Upgrades, HUD, Web-Audio-Sounds, Game Over

@@ -26,11 +26,28 @@ export class TerrainRenderer {
   private readonly indexContourPath = new Path2D();
   private readonly labels: ContourLabel[] = [];
   private readonly riverPath = new Path2D();
+  private readonly passMarkers: Vec2[] = [];
 
   constructor(private readonly topo: Topography) {
     this.bitmap = this.buildBitmap();
     this.buildContours();
     this.buildRiver();
+    this.buildPassMarkers();
+  }
+
+  /** Position jeder Rampa: dort, wo die Höhe westlich des Tals unter das Plateauniveau fällt. */
+  private buildPassMarkers(): void {
+    const { topo } = this;
+    for (const y of topo.passY) {
+      if (y < LABEL_EDGE_MARGIN_WU || y > topo.height - LABEL_EDGE_MARGIN_WU) continue;
+      const plateau = topo.metersAt(topo.cellSize, y);
+      for (let x = topo.cellSize; x < topo.width / 2; x += 4) {
+        if (topo.metersAt(x, y) < plateau - 90) {
+          this.passMarkers.push({ x, y });
+          break;
+        }
+      }
+    }
   }
 
   private buildBitmap(): HTMLCanvasElement {
@@ -137,6 +154,22 @@ export class TerrainRenderer {
     ctx.stroke(this.riverPath);
 
     if (zoom > 0.45) this.drawLabels(ctx, zoom);
+    this.drawPassMarkers(ctx, zoom);
+  }
+
+  /** Dezente Markierung "Rampa" an den Pässen durch die Ceja. */
+  private drawPassMarkers(ctx: CanvasRenderingContext2D, zoom: number): void {
+    const fontPx = 11 / Math.min(zoom, 1.4);
+    ctx.font = `700 ${fontPx}px "Avenir Next", "Segoe UI", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const p of this.passMarkers) {
+      ctx.lineWidth = 3.5 / Math.min(zoom, 1.4);
+      ctx.strokeStyle = 'rgba(246, 241, 230, 0.9)';
+      ctx.fillStyle = COLORS.pass;
+      ctx.strokeText('⟋ Rampa', p.x, p.y - fontPx * 1.2);
+      ctx.fillText('⟋ Rampa', p.x, p.y - fontPx * 1.2);
+    }
   }
 
   private drawLabels(ctx: CanvasRenderingContext2D, zoom: number): void {

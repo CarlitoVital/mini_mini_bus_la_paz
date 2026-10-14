@@ -4,18 +4,27 @@ import type { Camera } from '../render/Camera';
 const KEY_PAN_SPEED = 600; // Bildschirmpixel pro Sekunde
 const WHEEL_ZOOM_STEP = 1.0015;
 
+/** Empfänger für Links-/Rechtsklick-Gesten (Straßenbau / Abriss). Positionen in Bildschirm-px. */
+export interface PointerToolHandler {
+  pointerDown(button: number, screen: Vec2): void;
+  pointerMove(screen: Vec2): void;
+  pointerUp(button: number): void;
+}
+
 /**
- * Maus-/Tastatursteuerung der Kamera.
+ * Maus-/Tastatursteuerung.
  *  - Mausrad: Zoom zum Cursor
  *  - Mittlere Maustaste ziehen (oder Leertaste + Linksklick): Pan
  *  - WASD / Pfeiltasten: Pan, +/-: Zoom
- * Links-/Rechtsklick sind für Straßenbau und Abriss (Phase 2) reserviert.
+ *  - Links-/Rechtsklick (+ Ziehen) werden an den PointerToolHandler weitergereicht
  */
 export class InputController {
   /** Letzte Mausposition in Bildschirmkoordinaten (CSS px) oder null außerhalb. */
   pointer: Vec2 | null = null;
+  tool: PointerToolHandler | null = null;
 
   private panning = false;
+  private toolButton = -1;
   private spaceHeld = false;
   private readonly keys = new Set<string>();
   private lastPan: Vec2 = { x: 0, y: 0 };
@@ -26,7 +35,9 @@ export class InputController {
   ) {
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
     canvas.addEventListener('pointerdown', this.onPointerDown);
-    canvas.addEventListener('pointerleave', () => (this.pointer = null));
+    canvas.addEventListener('pointerleave', () => {
+      if (!this.panning && this.toolButton < 0) this.pointer = null;
+    });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
@@ -39,6 +50,7 @@ export class InputController {
       this.keys.clear();
       this.spaceHeld = false;
       this.panning = false;
+      this.endTool();
     });
   }
 
@@ -50,7 +62,11 @@ export class InputController {
     if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) dx += 1;
     if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) dy -= 1;
     if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) dy += 1;
-    if (dx || dy) this.camera.panByScreen(-dx * KEY_PAN_SPEED * dt, -dy * KEY_PAN_SPEED * dt);
+    if (dx || dy) {
+      this.camera.panByScreen(-dx * KEY_PAN_SPEED * dt, -dy * KEY_PAN_SPEED * dt);
+      // Beim Bauen mit Tastatur-Scrollen wandert der Cursor über die Welt
+      if (this.toolButton >= 0 && this.pointer) this.tool?.pointerMove(this.pointer);
+    }
   }
 
   get isPanning(): boolean {
@@ -68,14 +84,23 @@ export class InputController {
     // deltaMode 1 = Zeilen (Firefox), auf Pixel normieren
     const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
     this.camera.zoomAt(Math.pow(WHEEL_ZOOM_STEP, -delta), p.x, p.y);
+    if (this.toolButton >= 0) this.tool?.pointerMove(p);
   };
 
   private onPointerDown = (e: PointerEvent): void => {
+    if (this.panning || this.toolButton >= 0) return;
+    const p = this.localPos(e);
+    this.pointer = p;
     if (e.button === 1 || (e.button === 0 && this.spaceHeld)) {
       e.preventDefault();
       this.panning = true;
       this.lastPan = { x: e.clientX, y: e.clientY };
       this.canvas.setPointerCapture(e.pointerId);
+    } else if ((e.button === 0 || e.button === 2) && this.tool) {
+      e.preventDefault();
+      this.toolButton = e.button;
+      this.canvas.setPointerCapture(e.pointerId);
+      this.tool.pointerDown(e.button, p);
     }
   };
 
@@ -84,15 +109,22 @@ export class InputController {
       this.camera.panByScreen(e.clientX - this.lastPan.x, e.clientY - this.lastPan.y);
       this.lastPan = { x: e.clientX, y: e.clientY };
     }
-    if (e.target === this.canvas || this.panning) this.pointer = this.localPos(e);
+    if (e.target === this.canvas || this.panning || this.toolButton >= 0) this.pointer = this.localPos(e);
+    if (this.toolButton >= 0 && this.pointer) this.tool?.pointerMove(this.pointer);
   };
 
   private onPointerUp = (e: PointerEvent): void => {
-    if (this.panning && (e.button === 1 || e.button === 0)) {
-      this.panning = false;
-      if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
-    }
+    if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
+    if (this.panning && (e.button === 1 || e.button === 0)) this.panning = false;
+    if (e.button === this.toolButton) this.endTool();
   };
+
+  private endTool(): void {
+    if (this.toolButton < 0) return;
+    const button = this.toolButton;
+    this.toolButton = -1;
+    this.tool?.pointerUp(button);
+  }
 
   private onKeyDown = (e: KeyboardEvent): void => {
     if (e.target instanceof HTMLInputElement) return;

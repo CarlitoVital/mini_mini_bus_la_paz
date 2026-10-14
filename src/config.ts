@@ -28,6 +28,14 @@ export const CONTOUR_INTERVAL_M = 50;
 /** Jede n-te Linie wird als Zähllinie (dicker, beschriftet) gezeichnet. */
 export const CONTOUR_INDEX_EVERY = 4;
 
+/**
+ * Maximal zulässige Straßensteigung als reales Gefälle (Höhenmeter / horizontale Meter).
+ * 0.15 = 15 %. Steilere Direktverbindungen sind verboten → Serpentinen nötig.
+ */
+export const MAX_ALLOWED_SLOPE = 0.15;
+/** Ab diesem Anteil von MAX_ALLOWED_SLOPE wird die Steigung gelb (Warnung) angezeigt. */
+export const SLOPE_WARN_RATIO = 0.6;
+
 /** Kamera-Zoomgrenzen. */
 export const ZOOM_MIN = 0.35;
 export const ZOOM_MAX = 4;

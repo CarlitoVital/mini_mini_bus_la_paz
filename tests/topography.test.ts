@@ -18,15 +18,17 @@ describe('SimplexNoise2D', () => {
 });
 
 describe('Topography (La Paz / El Alto)', () => {
-  it('nutzt den vollen Höhenbereich 3.200–4.150 m', () => {
+  it('nutzt nahezu den vollen Höhenbereich 3.200–4.150 m', () => {
     let min = Infinity;
     let max = -Infinity;
     for (const h of topo.heights) {
       min = Math.min(min, h);
       max = Math.max(max, h);
     }
-    expect(min).toBeCloseTo(0, 5);
-    expect(max).toBeCloseTo(1, 5);
+    expect(min).toBeGreaterThanOrEqual(0);
+    expect(min).toBeLessThan(0.08);
+    expect(max).toBeLessThanOrEqual(1);
+    expect(max).toBeGreaterThan(0.9);
   });
 
   it('El Alto (Westen) liegt auf dem Plateau, Zona Sur (Südosten) im Talkessel', () => {

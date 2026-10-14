@@ -170,3 +170,69 @@ kbd {
     width: calc(100vw - 32px);
   }
 }
+
+.tooltip.alert {
+  background: rgba(150, 44, 40, 0.95);
+}
+
+.tt-road {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.tt-grade {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tt-grade::before,
+.tt-dot {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--status-color, #4fae6c);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.ok {
+  --status-color: #4fae6c;
+}
+.steep {
+  --status-color: #e5a530;
+}
+.blocked {
+  --status-color: #ff7a72;
+}
+
+.tt-warning {
+  margin-top: 3px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.tooltip.alert {
+  animation: shake 260ms ease;
+}
+
+@keyframes shake {
+  0%, 100% { margin-left: 0; }
+  25% { margin-left: -4px; }
+  75% { margin-left: 4px; }
+}
+
+.stats {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}

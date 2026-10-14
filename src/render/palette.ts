@@ -56,4 +56,8 @@ export const COLORS = {
   grid: 'rgba(90, 70, 50, 0.07)',
   hoverCell: 'rgba(60, 50, 40, 0.55)',
   mapEdge: 'rgba(80, 60, 40, 0.25)',
+  road: '#6a645e',
+  roadCasing: 'rgba(52, 40, 30, 0.16)',
+  roadMarking: 'rgba(255, 252, 245, 0.8)',
+  pass: 'rgba(110, 82, 60, 0.7)',
 } as const;

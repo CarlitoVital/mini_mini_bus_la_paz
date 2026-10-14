@@ -1,5 +1,25 @@
+import { ELEVATION_MAX_M, ELEVATION_MIN_M, GRID_COLS, METERS_PER_CELL } from '../config';
 import { SimplexNoise2D } from '../core/noise';
+import { mulberry32 } from '../core/random';
 import { clamp, lerp, smoothstep } from '../core/math';
+
+/** Höhenspanne der Karte in Metern (normierte Höhe 1.0). */
+const SPAN_M = ELEVATION_MAX_M - ELEVATION_MIN_M;
+/** Kartenbreite in Metern (normiertes u = 1.0). */
+const MAP_WIDTH_M = GRID_COLS * METERS_PER_CELL;
+
+/** Durchschnittliches Gefälle der Laderas (Westhang unterhalb der Ceja). */
+const LADERA_GRADE = 0.105;
+/** Anteil des Höhenunterschieds Tal → Plateau, den die Ceja-Steilwand ausmacht. */
+const CEJA_FRACTION = 0.32;
+/** Gefälle der Ceja als Steilwand bzw. in einer Rampa (Pass). */
+const CEJA_CLIFF_GRADE = 0.6;
+const CEJA_RAMP_GRADE = 0.185;
+/** Durchschnittliches Gefälle der Osthänge. */
+const EAST_GRADE = 0.085;
+
+/** Horizontale Breite (in u) für einen Höhenunterschied Δe bei gegebenem Gefälle. */
+const widthFor = (deltaE: number, grade: number): number => (deltaE * SPAN_M) / (grade * MAP_WIDTH_M);
 
 /**
  * Prozeduraler Höhengenerator, der die Topografie von La Paz / El Alto nachbildet.
@@ -8,25 +28,33 @@ import { clamp, lerp, smoothstep } from '../core/math';
  * Die Karte ist zentriert auf das Stadtzentrum (Plaza Murillo, -16.52448 / -68.12382).
  *
  * Aufbau (grob von West nach Ost):
- *   1. El Alto  – flaches Altiplano-Plateau im Westen/Nordwesten (≈ 4.050–4.150 m)
- *   2. La Ceja  – die Abbruchkante des Plateaus, eine fast senkrechte Steilwand
- *   3. Laderas  – die steilen, von Quebradas (Erosionsrinnen) zerfurchten Hänge
- *   4. Talboden – das Tal des Río Choqueyapu, das von Norden (Centro, ≈ 3.650 m)
- *                 nach Südosten (Zona Sur, ≈ 3.250 m) abfällt
- *   5. Osthänge – die Hügel von Miraflores / Villa Fátima, die wieder ansteigen
+ *   1. El Alto  – flaches Altiplano-Plateau im Westen (≈ 4.050–4.150 m)
+ *   2. La Ceja  – Abbruchkante des Plateaus: eine unbebaubare Steilwand, die nur an
+ *                 wenigen Rampas (Pässen) auf ein per Serpentine bezwingbares Gefälle abflacht
+ *   3. Laderas  – lange, von Quebradas (Erosionsrinnen) zerfurchte Hänge
+ *   4. Talboden – Tal des Río Choqueyapu, das von Norden (≈ 3.800 m) über das Centro
+ *                 (≈ 3.600 m) nach Südosten (Zona Sur, ≈ 3.200 m) abfällt
+ *   5. Osthänge – die Hügel von Miraflores / Villa Fátima
+ *
+ * Die Hangprofile sind in realen Gefällen parametrisiert, damit das Steigungslimit
+ * für Straßen (MAX_ALLOWED_SLOPE) planbar greift.
  */
 export class LaPazGenerator {
   private readonly n: SimplexNoise2D;
   private readonly aspect: number;
+  /** v-Positionen der Rampas, an denen die Ceja befahrbar abflacht. */
+  readonly passes: number[];
 
   constructor(seed: number, aspect: number) {
     this.n = new SimplexNoise2D(seed);
     this.aspect = aspect; // Breite / Höhe – für isotrope Noise-Frequenzen
+    const rand = mulberry32(seed ^ 0x5eed);
+    this.passes = [0.14, 0.48, 0.8].map((v) => v + (rand() - 0.5) * 0.12);
   }
 
   /** x-Position des Río Choqueyapu (Talachse) in Abhängigkeit von v. */
   riverX(v: number): number {
-    return 0.46 + 0.3 * Math.pow(v, 1.5) + 0.035 * Math.sin(v * 7.5 + 0.6) + 0.025 * this.n.fbm(v * 2.2, 17.3, 3);
+    return 0.5 + 0.28 * Math.pow(v, 1.5) + 0.03 * Math.sin(v * 7.5 + 0.6) + 0.02 * this.n.fbm(v * 2.2, 17.3, 3);
   }
 
   /** Höhe des Talbodens entlang der Talachse (Nord hoch, Südost tief). */
@@ -34,68 +62,86 @@ export class LaPazGenerator {
     return 0.62 - 0.6 * Math.pow(v, 1.6);
   }
 
-  /** x-Position der Ceja (Abbruchkante El Alto). */
-  private rimX(v: number): number {
-    return 0.22 + 0.12 * v + 0.035 * this.n.fbm(v * 3.1, 4.7, 3);
+  /** Grundhöhe des Plateaus El Alto – nach Süden (Richtung Achocalla) niedriger. */
+  private plateauBase(v: number): number {
+    return 0.95 - 0.15 * smoothstep(0.6, 1.05, v) + 0.015 * this.n.fbm(v * 3, 40, 2);
   }
 
-  /** Plateauhöhe El Alto – nach Süden (Richtung Achocalla) etwas niedriger. */
-  private plateauHeight(u: number, v: number): number {
-    const south = v + 0.12 * this.n.fbm(u * 2.5 + 40, v * 2.5, 2);
-    const base = 0.95 - 0.16 * smoothstep(0.55, 1.05, south) + 0.04 * (0.3 - u);
-    return base + 0.018 * this.n.fbm(u * 3 * this.aspect, v * 3, 3);
+  /** Feines Relief auf dem Plateau. */
+  private plateauRelief(u: number, v: number): number {
+    return 0.02 * this.n.fbm(u * 3 * this.aspect, v * 3, 3) + 0.03 * (0.15 - u);
   }
 
-  /** Höhe der Osthügel. */
-  private eastHillHeight(u: number, v: number): number {
-    return 0.74 - 0.14 * v + 0.07 * this.n.fbm(u * 2.5 * this.aspect + 9.1, v * 2.5, 3);
+  /** 0..1 – wie stark die Ceja an dieser Stelle zur Rampa abgeflacht ist. */
+  passFactor(v: number): number {
+    let p = 0;
+    for (const pv of this.passes) {
+      const d = (v - pv) / 0.045;
+      p = Math.max(p, Math.exp(-d * d));
+    }
+    return smoothstep(0.15, 0.85, p);
   }
 
-  /** Normierte Höhe an (u, v), ungefähr in [0, 1] (wird im Topography-Grid normiert). */
+  /** Normierte Höhe an (u, v) in ca. [0, 1]. */
   sample(u: number, v: number): number {
     const n = this.n;
     const nu = u * this.aspect;
 
     const rx = this.riverX(v);
     const floor = this.floorHeight(v);
-    const rim = this.rimX(v);
-    const floorHalfWidth = 0.012 + 0.012 * v; // Zona Sur hat breiteren Talboden
+    const floorHalfWidth = 0.01 + 0.012 * v; // Zona Sur hat breiteren Talboden
 
     let e: number;
     /** 0 auf Plateau/Talboden, 1 mitten am Hang – steuert Detail & Quebradas. */
     let slopeMask: number;
 
-    if (u <= rim) {
-      // ---------- El Alto Plateau ----------
-      e = this.plateauHeight(u, v);
-      slopeMask = 0.15 * smoothstep(rim - 0.04, rim, u);
-    } else if (u <= rx) {
-      // ---------- Westhang: Talboden → Laderas → Ceja ----------
-      const width = Math.max(0.05, rx - rim - floorHalfWidth);
-      const w = clamp((rx - floorHalfWidth - u) / width, 0, 1); // 0 = Talboden, 1 = Kante
-      const shape = 0.52 * Math.pow(w, 1.55) + 0.48 * smoothstep(0.76, 1.0, w);
-      e = lerp(floor, this.plateauHeight(rim, v), shape);
-      slopeMask = smoothstep(0.0, 0.15, w) * (1 - smoothstep(0.82, 0.97, w));
+    if (u <= rx) {
+      // ---------- Westhang: Talboden → Laderas → Ceja → El Alto ----------
+      const rise = this.plateauBase(v) - floor;
+      const cejaRise = rise * CEJA_FRACTION;
+      const laderaRise = rise - cejaRise;
+      const pass = this.passFactor(v);
+      const laderaW = widthFor(laderaRise, LADERA_GRADE) * (1 + 0.12 * n.fbm(v * 4, 2.5, 2));
+      const cejaW = widthFor(cejaRise, lerp(CEJA_CLIFF_GRADE, CEJA_RAMP_GRADE, pass));
+      const d = rx - floorHalfWidth - u; // Abstand vom Talboden nach Westen
+
+      if (d <= 0) {
+        e = floor;
+        slopeMask = 0;
+      } else if (d < laderaW) {
+        const t = d / laderaW;
+        e = floor + laderaRise * Math.pow(t, 1.2);
+        slopeMask = smoothstep(0, 0.12, t) * (1 - smoothstep(0.85, 1, t) * (1 - pass));
+      } else if (d < laderaW + cejaW) {
+        const t = (d - laderaW) / cejaW;
+        // Steilwand: s-förmig; Rampa: nahezu linear (konstantes, fahrbares Gefälle)
+        e = floor + laderaRise + cejaRise * lerp(smoothstep(0, 1, t), t, pass);
+        slopeMask = 0.4 * pass;
+      } else {
+        const beyond = d - laderaW - cejaW;
+        e = this.plateauBase(v) + this.plateauRelief(u, v) * smoothstep(0, 0.04, beyond);
+        slopeMask = 0;
+      }
     } else {
       // ---------- Osthang: Talboden → Miraflores / Villa Fátima ----------
-      const width = 0.2;
+      const rise = 0.25 + 0.06 * n.fbm(nu * 2 + 9.1, v * 2.5, 3);
+      const width = widthFor(rise, EAST_GRADE);
       const d = Math.max(0, u - rx - floorHalfWidth);
-      const w = clamp(d / width, 0, 1);
-      const shape = Math.pow(smoothstep(0, 1, w), 0.95);
-      e = lerp(floor, this.eastHillHeight(u, v), shape);
+      const t = clamp(d / width, 0, 1);
+      e = floor + rise * smoothstep(0, 1, t);
       // jenseits des Hangs: Hügelkuppen mit leichtem Relief
-      e += 0.05 * smoothstep(1, 1.6, d / width) * n.fbm(nu * 4 + 3, v * 4, 3);
-      slopeMask = smoothstep(0.0, 0.2, w);
+      e += 0.04 * smoothstep(1, 1.5, d / width) * n.fbm(nu * 4 + 3, v * 4, 3);
+      slopeMask = smoothstep(0.0, 0.15, t);
     }
 
     // Quebradas: Erosionsrinnen, die quer zum Tal in die Hänge schneiden.
     // Ridged-Noise mit gestauchter Frequenz entlang der Talachse.
     const gully = n.ridged(nu * 3.2 + 31, v * 7.5 + 11, 3);
-    e -= 0.075 * Math.pow(gully, 3) * slopeMask;
+    e -= 0.04 * Math.pow(gully, 3) * slopeMask;
 
-    // Feines Relief – stark an den Hängen, schwach auf Plateau und Talboden.
-    e += (0.008 + 0.022 * slopeMask) * n.fbm(nu * 9 + 5, v * 9 - 3, 4);
+    // Feines Relief – stärker an den Hängen, schwach auf Plateau und Talboden.
+    e += (0.006 + 0.014 * slopeMask) * n.fbm(nu * 9 + 5, v * 9 - 3, 4);
 
-    return e;
+    return clamp(e, 0, 1);
   }
 }
