@@ -56,6 +56,14 @@ export class Tooltip {
     this.render(screen, html, info.status === 'blocked' ? 'alert' : '');
   }
 
+  /** Allgemeine Info (Bus, Markt, Garage): Titel mit Farbmarke + Zeilen. */
+  showInfo(screen: Vec2, title: string, color: string, lines: string[]): void {
+    const html =
+      `<div class="tt-title"><span class="tt-swatch" style="background:${color}"></span>${title}</div>` +
+      lines.map((l) => `<div class="tt-meta"><span>${l}</span></div>`).join('');
+    this.render(screen, html, '');
+  }
+
   hide(): void {
     this.el.classList.remove('visible');
   }

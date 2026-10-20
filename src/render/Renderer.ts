@@ -1,9 +1,11 @@
 import type { RoadNetwork } from '../roads/RoadNetwork';
 import type { RoadTool } from '../roads/RoadTool';
+import type { Simulation } from '../sim/Simulation';
 import type { Topography } from '../terrain/Topography';
 import type { Camera } from './Camera';
 import { COLORS } from './palette';
 import { RoadRenderer } from './RoadRenderer';
+import { SimRenderer } from './SimRenderer';
 import { TerrainRenderer } from './TerrainRenderer';
 
 export interface RenderState {
@@ -15,6 +17,7 @@ export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private terrain: TerrainRenderer;
   private readonly roads: RoadRenderer;
+  readonly simRenderer: SimRenderer;
   private dpr = 1;
 
   constructor(
@@ -23,16 +26,20 @@ export class Renderer {
     private readonly camera: Camera,
     net: RoadNetwork,
     private readonly tool: RoadTool,
+    sim: Simulation,
   ) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
     this.terrain = new TerrainRenderer(topo);
-    this.roads = new RoadRenderer(net, topo);
+    this.roads = new RoadRenderer(net, topo, sim.buildings);
+    this.simRenderer = new SimRenderer(net, sim);
   }
 
-  setTopography(topo: Topography): void {
+  setWorld(topo: Topography, sim: Simulation): void {
     this.topo = topo;
     this.terrain = new TerrainRenderer(topo);
     this.roads.setTopography(topo);
+    this.roads.rules = sim.buildings;
+    this.simRenderer.sim = sim;
   }
 
   resize(): void {
@@ -65,6 +72,7 @@ export class Renderer {
     this.drawGrid();
     if (state.hoverCell && !this.tool.isActive) this.drawHoverCell(state.hoverCell.cx, state.hoverCell.cy);
     this.roads.draw(ctx, camera.zoom);
+    this.simRenderer.draw(ctx, camera.zoom);
     this.roads.drawPreview(ctx, this.tool, camera.zoom);
 
     ctx.strokeStyle = COLORS.mapEdge;

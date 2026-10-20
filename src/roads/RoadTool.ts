@@ -1,7 +1,7 @@
 import type { Vec2 } from '../core/math';
 import type { Topography } from '../terrain/Topography';
 import { type Cell, type Edge, type NodeId, type RoadNetwork, cellsOnLine } from './RoadNetwork';
-import { type BuildCheck, checkSegment } from './RoadRules';
+import { type BuildCheck, type ConnectionRules, checkSegment } from './RoadRules';
 
 type Mode = 'idle' | 'build' | 'erase';
 
@@ -54,6 +54,7 @@ export class RoadTool {
     private readonly net: RoadNetwork,
     private topo: Topography,
     private readonly events: RoadToolEvents = {},
+    public rules?: ConnectionRules,
   ) {}
 
   setTopography(topo: Topography): void {
@@ -133,7 +134,7 @@ export class RoadTool {
     this.blocked = null;
     for (const c of cellsOnLine(this.net.cellOf(this.anchor), target)) {
       const next = this.net.id(c.cx, c.cy);
-      const check = checkSegment(this.topo, this.net, this.anchor, next);
+      const check = checkSegment(this.topo, this.net, this.anchor, next, this.rules);
       if (!check.ok) {
         this.blocked = { from: this.anchor, to: next, check };
         // Feedback nur beim Wechsel in den blockierten Zustand / auf ein neues Ziel auslösen

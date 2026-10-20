@@ -25,7 +25,8 @@ npm test           # Unit-Tests (Vitest)
 | Mausrad | Zoom zum Cursor |
 | Mittlere Maustaste / Leertaste + Ziehen | Kamera verschieben |
 | WASD / Pfeiltasten, `+` / `-` | Kamera bewegen / zoomen |
-| Hover | Höhe ü. NN, Geländeneigung, Stadtteil; über Straßen deren Steigung |
+| `P` / `1` / `2` | Pause / normale / doppelte Geschwindigkeit (auch per HUD oben rechts) |
+| Hover | Höhe ü. NN, Geländeneigung, Stadtteil; Straßen-Steigung; Bus-, Markt- und Garagen-Infos |
 
 ## Straßenbau & Steigungslimit
 
@@ -40,6 +41,26 @@ Die Ceja (Abbruchkante von El Alto) ist mit ~60 % Gefälle eine geschlossene Wan
 seed-abhängigen **Rampas** flacht sie auf ~18 % ab – dort führt der Weg aufs Plateau nur über
 Serpentinen. Straßen werden als quadratische Bezier-Kurven durch die Zellmittelpunkte gezeichnet;
 Pfeile auf der Fahrbahn zeigen bergauf (doppelt bei steilen Abschnitten).
+
+## Minibusse & Simulation
+
+- **Garajes** (1×1, Linienfarbe) beherbergen je 2 Minibusse; **Mercados** (2×2) erzeugen Nachfrage-Pins.
+  Beide haben eine feste Zufahrt (Stummel) – nur von dort aus lassen sie sich anschließen.
+- **Disposition:** Hat ein Markt unzugeteilte Pins, fährt der Bus derselben Farbe los, dessen Garage
+  laut A* die kürzeste *erwartete Fahrzeit* hat. Er lädt bis zu 4 Fahrgäste und bringt sie heim (+1 Punkt je Fahrgast).
+- **A\*:** Kantengewicht = `Distanz / erwartete Geschwindigkeit(Steigung)`, richtungsabhängig – flache Umwege
+  schlagen steile Direktwege. Routen werden pro Netzversion gecacht; bei Abriss wird unterwegs neu geplant
+  (ohne Alternative blendet der Bus aus und kehrt in die Garage zurück).
+- **Bergauf-Physik:** `speed = base · max(0.2, 1 − grade · UPHILL_PENALTY_FACTOR)` mit Faktor 5
+  (15 % Steigung → 25 % Tempo); bergab bis +25 %, gedeckelt durch Kurvenradien (Kehren drosseln auf ~55 %).
+  Bergauf beschleunigen Busse zusätzlich träger.
+- **Abstand & Rückstau:** Busse fahren in der rechten Spur und halten Abstand zum Vordermann – ein
+  kriechender Bus am Hang staut alle dahinter. Kreuzungen (≥ 3 Äste) werden reserviert, damit nur ein
+  Bus gleichzeitig im Knoten ist (mit Deadlock-Schutz).
+- **Spawning:** Linien entstehen nach Pendlerströmen (Miraflores → Centro, El Alto → Prado,
+  Laderas → Zona Sur, Zona Sur → Feria El Alto …); neue Farbe alle 2 Tage, Garagen alle ~12 s, Märkte alle 75 s.
+- **Überlastung:** Ab 8 wartenden Pins füllt sich der runde Timer am Markt (45 s); läuft er voll,
+  erscheint eine Warnung (Game Over folgt in Phase 4).
 
 ## Projektstruktur
 
@@ -60,20 +81,31 @@ src/
 │   ├── Camera.ts             Pan/Zoom, Welt↔Bildschirm
 │   ├── Renderer.ts           HiDPI-Canvas, Ebenen: Gelände, Gitter, Hover-Zelle, Straßen
 │   ├── RoadRenderer.ts       Bezier-Straßen, Bergauf-Pfeile, Bau-Vorschau (Ampel, rote Sperre)
+│   ├── SimRenderer.ts        Garagen, Märkte mit Pins & Überlastungs-Timer, Minibusse (Dachgepäckträger)
 │   ├── TerrainRenderer.ts    Höhenband-Bitmap + Höhenlinien als Vektorpfade + Beschriftung + Fluss
 │   └── palette.ts            Hypsometrische Farbskala & UI-Farben
 ├── roads/
 │   ├── RoadNetwork.ts        Ungerichteter Graph über dem Gitter, Diagonal-Kreuzungsregel, Linienrasterung
 │   ├── RoadRules.ts          Steigungsberechnung, MAX_ALLOWED_SLOPE-Prüfung, Ampel-Einstufung
 │   └── RoadTool.ts           Drag-and-Drop-Bau, Abriss, Undo
+├── sim/
+│   ├── Simulation.ts         Uhr, Spawning, Nachfrage/Überlastung, Disposition, Neuplanung, Busse-Kontext
+│   ├── Minibus.ts            Agent: Zustandsautomat, Steigungs-/Kurventempo, Abstand, Kreuzungsreservierung
+│   ├── Pathfinding.ts        A* mit Fahrzeit-Gewichten (Binär-Heap)
+│   ├── Route.ts              Fahrgeometrie entlang der Bezier-Kurven, Steigung/Kurvenfaktor je Abschnitt
+│   ├── physics.ts            gradeSpeedFactor, curveSpeedFactor, erwartete Geschwindigkeit
+│   ├── Buildings.ts          Garagen & Märkte, Zellbelegung, Anschlussregel
+│   └── Spawner.ts            Bauplatzsuche (Zufahrt anschließbar, Markt flach, Abstand zum Fluss)
 ├── input/
 │   └── InputController.ts    Maus/Tastatur → Kamera; Links/Rechts → Straßenwerkzeug
 └── ui/
+    ├── Hud.ts                Passagiere, Wochentag-Uhr, Pause/1x/2x, Warnungen
     ├── Legend.ts             Höhenlegende
     └── Tooltip.ts            Höhen-Tooltip („3.640 m ü. NN“)
 tests/
 ├── topography.test.ts        Invarianten der Topografie, Noise-Determinismus, Marching Squares
-└── roads.test.ts             Graph, Steigungsregel, Werkzeug, Erreichbarkeit El Altos nur über Rampas
+├── roads.test.ts             Graph, Steigungsregel, Werkzeug, Erreichbarkeit El Altos nur über Rampas
+└── sim.test.ts               Physik, A*, Route, komplette Touren, Bergauf vs. bergab, Abstand, Neuplanung, Spawning
 ```
 
 ## Topografie-Modell
@@ -88,5 +120,5 @@ werden aus Ziel-Gefällen berechnet, damit das Steigungslimit planbar greift.
 
 1. ✅ Setup & Topografie (Höhengenerator, Isohypsen, Höhen-Tooltip)
 2. ✅ Straßenbau mit Steigungslimit (`MAX_ALLOWED_SLOPE`), „Zu steil!“-Feedback, Bezier-Serpentinen
-3. Minibusse, A* nach Fahrzeit, Bergauf-Physik (`UPHILL_PENALTY_FACTOR`), Rückstau
+3. ✅ Minibusse, A* nach Fahrzeit, Bergauf-Physik (`UPHILL_PENALTY_FACTOR`), Rückstau
 4. Ressourcen & Wochen-Upgrades, HUD, Web-Audio-Sounds, Game Over

@@ -1,7 +1,7 @@
 import { CELL_SIZE } from '../config';
 import type { Vec2 } from '../core/math';
 import type { NodeId, RoadNetwork } from '../roads/RoadNetwork';
-import { type GradeStatus, checkSegment, gradeStatus, segmentGrade } from '../roads/RoadRules';
+import { type ConnectionRules, type GradeStatus, checkSegment, gradeStatus, segmentGrade } from '../roads/RoadRules';
 import type { RoadTool } from '../roads/RoadTool';
 import type { Topography } from '../terrain/Topography';
 import { COLORS } from './palette';
@@ -38,6 +38,7 @@ export class RoadRenderer {
   constructor(
     private readonly net: RoadNetwork,
     private topo: Topography,
+    public rules?: ConnectionRules,
   ) {}
 
   setTopography(topo: Topography): void {
@@ -139,7 +140,7 @@ export class RoadRenderer {
         const c = { cx: ac.cx + dx, cy: ac.cy + dy };
         if (!net.inBounds(c)) continue;
         const n: NodeId = net.id(c.cx, c.cy);
-        const check = checkSegment(topo, net, anchor, n);
+        const check = checkSegment(topo, net, anchor, n, this.rules);
         const status: GradeStatus = check.ok ? gradeStatus(check.grade) : 'blocked';
         const p = net.centerOf(n);
         ctx.fillStyle = STATUS_COLORS[status];

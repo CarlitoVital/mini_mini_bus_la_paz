@@ -61,3 +61,24 @@ export const COLORS = {
   roadMarking: 'rgba(255, 252, 245, 0.8)',
   pass: 'rgba(110, 82, 60, 0.7)',
 } as const;
+
+/** Linienfarben der Minibusse (Garage, Markt und Bus teilen sich eine Farbe). */
+export const LINE_COLORS = ['#e2574c', '#3d7fd1', '#eea42b', '#3fa66b', '#9b6bd3'] as const;
+export const LINE_NAMES = ['Roja', 'Azul', 'Amarilla', 'Verde', 'Morada'] as const;
+
+/** Farbe mit Weiß mischen (t = Anteil Weiß). */
+export function tint(hex: string, t: number): string {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const m = (c: number) => Math.round(c + (255 - c) * t);
+  return `rgb(${m(r)}, ${m(g)}, ${m(b)})`;
+}
+
+/** Farbe abdunkeln (t = Anteil Schwarz). */
+export function shade(hex: string, t: number): string {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const m = (c: number) => Math.round(c * (1 - t));
+  return `rgb(${m((n >> 16) & 255)}, ${m((n >> 8) & 255)}, ${m(n & 255)})`;
+}

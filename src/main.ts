@@ -1,15 +1,31 @@
 import './style.css';
-import { DEFAULT_SEED, GRID_COLS, GRID_ROWS, METERS_PER_WU, WORLD_HEIGHT, WORLD_WIDTH } from './config';
+import {
+  BUS_BASE_SPEED,
+  BUS_CAPACITY,
+  BUSES_PER_HOUSE,
+  DEFAULT_SEED,
+  GRID_COLS,
+  GRID_ROWS,
+  METERS_PER_WU,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
+} from './config';
+import type { Vec2 } from './core/math';
 import { GameLoop } from './core/GameLoop';
 import { InputController } from './input/InputController';
 import { Camera } from './render/Camera';
+import { LINE_COLORS, LINE_NAMES } from './render/palette';
 import { Renderer } from './render/Renderer';
 import { RoadNetwork } from './roads/RoadNetwork';
 import { REJECTION_TEXT, gradeStatus, segmentGrade } from './roads/RoadRules';
 import { RoadTool } from './roads/RoadTool';
+import type { Building } from './sim/Buildings';
+import type { BusState, Minibus } from './sim/Minibus';
+import { Simulation } from './sim/Simulation';
 import { Topography } from './terrain/Topography';
+import { Hud } from './ui/Hud';
 import { createLegend } from './ui/Legend';
-import { Tooltip } from './ui/Tooltip';
+import { Tooltip, formatGrade } from './ui/Tooltip';
 
 function readSeed(): number {
   const raw = new URLSearchParams(location.search).get('seed');
@@ -25,8 +41,17 @@ const statsLabel = document.querySelector<HTMLDivElement>('#stats')!;
 let topo = new Topography(readSeed());
 const camera = new Camera(WORLD_WIDTH, WORLD_HEIGHT);
 const network = new RoadNetwork(GRID_COLS, GRID_ROWS);
-const roadTool = new RoadTool(network, topo);
-const renderer = new Renderer(canvas, topo, camera, network, roadTool);
+const loop = new GameLoop(
+  (dt) => sim.update(dt),
+  (frameDt) => frame(frameDt),
+);
+const hud = new Hud(app, (s) => (loop.timeScale = s));
+const simEvents = {
+  onOverflow: () => hud.toast('Ein Markt ist überlastet! (Game Over folgt in Phase 4)'),
+};
+let sim = new Simulation(topo, network, topo.seed, simEvents);
+const roadTool = new RoadTool(network, topo, {}, sim.buildings);
+const renderer = new Renderer(canvas, topo, camera, network, roadTool, sim);
 const input = new InputController(canvas, camera);
 const tooltip = new Tooltip(app);
 createLegend(app);
@@ -49,13 +74,15 @@ window.addEventListener('keydown', (e) => {
     roadTool.undo();
     return;
   }
-  // N: neue Karte mit zufälligem Seed (Straßennetz wird geleert)
+  // N: neue Karte mit zufälligem Seed (Straßennetz und Simulation werden zurückgesetzt)
   if (e.code === 'KeyN' && !roadTool.isActive) {
     const seed = Math.floor(Math.random() * 1_000_000);
     topo = new Topography(seed);
     network.clear();
+    sim = new Simulation(topo, network, seed, simEvents);
     roadTool.setTopography(topo);
-    renderer.setTopography(topo);
+    roadTool.rules = sim.buildings;
+    renderer.setWorld(topo, sim);
     seedLabel.textContent = String(seed);
     history.replaceState(null, '', `?seed=${seed}`);
   }
@@ -69,6 +96,37 @@ function updateStats(): void {
   let lengthWu = 0;
   for (const e of network.edges()) lengthWu += network.edgeLength(e.a, e.b);
   statsLabel.textContent = `Straßennetz ${kmFormat.format((lengthWu * METERS_PER_WU) / 1000)} km · ${network.edgeCount} Segmente`;
+}
+
+const BUS_STATE_TEXT: Record<BusState, string> = {
+  parked: 'in der Garage',
+  toMarket: 'fährt zum Markt',
+  loading: 'Fahrgäste steigen ein',
+  toHome: 'fährt heim',
+  unloading: 'Fahrgäste steigen aus',
+  lost: 'kein Weg – kehrt um',
+};
+
+function showBusInfo(screen: Vec2, bus: Minibus): void {
+  const lines = [`${bus.passengers}/${BUS_CAPACITY} Fahrgäste · ${BUS_STATE_TEXT[bus.state]}`];
+  if (bus.isMoving) {
+    lines.push(`Steigung ${formatGrade(bus.grade)} · Tempo ${Math.round((bus.speed / BUS_BASE_SPEED) * 100)} %`);
+  }
+  tooltip.showInfo(screen, `Minibus ${LINE_NAMES[bus.color]}`, LINE_COLORS[bus.color], lines);
+}
+
+function showBuildingInfo(screen: Vec2, b: Building): void {
+  const connected = network.hasEdge(b.entrance, b.driveway);
+  const lines: string[] = [];
+  if (b.kind === 'market') {
+    lines.push(`${b.pins} wartend · ${b.claimed} zugeteilt`);
+    if (b.overload > 0) lines.push(`Überlastung ${Math.round(b.overload * 100)} %`);
+  } else {
+    lines.push(`${b.parked}/${BUSES_PER_HOUSE} Busse in der Garage`);
+  }
+  if (!connected) lines.push('Nicht angeschlossen – Straße zur Zufahrt bauen');
+  const title = `${b.kind === 'market' ? 'Mercado' : 'Garaje'} ${LINE_NAMES[b.color]}`;
+  tooltip.showInfo(screen, title, LINE_COLORS[b.color], lines);
 }
 
 function updateTooltip(): void {
@@ -92,7 +150,14 @@ function updateTooltip(): void {
   if (roadTool.mode === 'erase') return tooltip.hide();
 
   const w = camera.screenToWorld(input.pointer.x, input.pointer.y);
-  if (!topo.cellAt(w.x, w.y)) return tooltip.hide();
+  const cell = topo.cellAt(w.x, w.y);
+  if (!cell) return tooltip.hide();
+
+  const bus = renderer.simRenderer.busAt(w);
+  if (bus) return showBusInfo(input.pointer, bus);
+  const building = sim.buildings.at(network.id(cell.cx, cell.cy));
+  if (building) return showBuildingInfo(input.pointer, building);
+
   const edge = network.edgeNear(w, topo.cellSize * 0.3);
   const roadGrade = edge ? Math.abs(segmentGrade(topo, network, edge.a, edge.b)) : undefined;
   tooltip.showTerrain(input.pointer, {
@@ -104,21 +169,18 @@ function updateTooltip(): void {
   });
 }
 
-const loop = new GameLoop(
-  () => {
-    // Simulation folgt in Phase 3 (Minibusse, Spawning).
-  },
-  (frameDt) => {
-    input.update(frameDt);
-    updateTooltip();
-    updateStats();
+function frame(frameDt: number): void {
+  input.update(frameDt);
+  updateTooltip();
+  updateStats();
+  hud.update(sim.score, sim.day, sim.dayFraction, frameDt);
 
-    let hoverCell: { cx: number; cy: number } | null = null;
-    if (input.pointer && !input.isPanning) {
-      const w = camera.screenToWorld(input.pointer.x, input.pointer.y);
-      hoverCell = topo.cellAt(w.x, w.y);
-    }
-    renderer.render({ hoverCell });
-  },
-);
+  let hoverCell: { cx: number; cy: number } | null = null;
+  if (input.pointer && !input.isPanning) {
+    const w = camera.screenToWorld(input.pointer.x, input.pointer.y);
+    hoverCell = topo.cellAt(w.x, w.y);
+  }
+  renderer.render({ hoverCell });
+}
+
 loop.start();

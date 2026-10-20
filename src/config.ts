@@ -58,3 +58,37 @@ export function elevationToMeters(e: number): number {
 export function metersToElevation(m: number): number {
   return (m - ELEVATION_MIN_M) / (ELEVATION_MAX_M - ELEVATION_MIN_M);
 }
+
+// ---------------------------------------------------------------------------
+// Simulation (Phase 3)
+// ---------------------------------------------------------------------------
+
+/** Grundgeschwindigkeit eines Minibusses in der Ebene (World Units pro Sekunde). */
+export const BUS_BASE_SPEED = 46;
+/** Bergauf: speed = base * max(MIN_SPEED_FACTOR, 1 − grade * UPHILL_PENALTY_FACTOR). */
+export const UPHILL_PENALTY_FACTOR = 5;
+export const MIN_SPEED_FACTOR = 0.2;
+/** Bergab: leichter Bonus, gedeckelt (und zusätzlich durch Kurvenradien begrenzt). */
+export const DOWNHILL_BONUS_FACTOR = 2;
+export const DOWNHILL_MAX_BONUS = 0.25;
+/** Beschleunigung / Bremsverzögerung in WU/s². */
+export const BUS_ACCEL = 40;
+export const BUS_BRAKE = 160;
+/** Fahrzeugmaße in WU und Seitenversatz der Fahrspur (Rechtsverkehr). */
+export const BUS_LENGTH = 12;
+export const BUS_WIDTH = 6.5;
+export const LANE_OFFSET = 3.4;
+/** Passagiere (Pins) pro Minibus und Busse pro Garage. */
+export const BUS_CAPACITY = 4;
+export const BUSES_PER_HOUSE = 2;
+/** Sekunden pro ein-/aussteigendem Passagier. */
+export const BOARDING_TIME_PER_PIN = 0.45;
+
+/** Länge eines In-Game-Tages in Sekunden (bei 1x). */
+export const DAY_LENGTH_S = 40;
+/** Ab so vielen wartenden Pins läuft der Überlastungs-Timer eines Marktes. */
+export const MARKET_OVERLOAD_PINS = 8;
+/** Zeit bis zum Überlauf (Timer voll) in Sekunden. */
+export const MARKET_OVERLOAD_TIME_S = 45;
+/** Maximal angezeigte/angesammelte Pins pro Markt. */
+export const MARKET_MAX_PINS = 12;

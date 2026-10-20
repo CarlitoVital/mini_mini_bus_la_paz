@@ -4,7 +4,12 @@ import type { NodeId, RoadNetwork } from './RoadNetwork';
 
 export type GradeStatus = 'ok' | 'steep' | 'blocked';
 
-export type BuildRejection = 'too-steep' | 'crossing' | 'not-adjacent' | 'out-of-bounds';
+export type BuildRejection = 'too-steep' | 'crossing' | 'not-adjacent' | 'out-of-bounds' | 'building' | 'wrong-side';
+
+/** Zusätzliche Anschlussregeln (z. B. Gebäude); null = erlaubt. */
+export interface ConnectionRules {
+  connectionRule(a: NodeId, b: NodeId): BuildRejection | null;
+}
 
 export interface BuildCheck {
   ok: boolean;
@@ -38,10 +43,18 @@ export function gradeStatus(grade: number): GradeStatus {
 }
 
 /** Prüft, ob die Straße a–b gebaut werden darf (Nachbarschaft, Steigungslimit, Kreuzung). */
-export function checkSegment(topo: Topography, net: RoadNetwork, a: NodeId, b: NodeId): BuildCheck {
+export function checkSegment(
+  topo: Topography,
+  net: RoadNetwork,
+  a: NodeId,
+  b: NodeId,
+  rules?: ConnectionRules,
+): BuildCheck {
   if (!net.areAdjacent(a, b)) return { ok: false, grade: 0, reason: 'not-adjacent' };
   const grade = segmentGrade(topo, net, a, b);
   if (net.hasEdge(a, b)) return { ok: true, grade };
+  const ruleViolation = rules?.connectionRule(a, b);
+  if (ruleViolation) return { ok: false, grade, reason: ruleViolation };
   if (Math.abs(grade) > MAX_ALLOWED_SLOPE) return { ok: false, grade, reason: 'too-steep' };
   if (net.crossesDiagonal(a, b)) return { ok: false, grade, reason: 'crossing' };
   return { ok: true, grade };
@@ -52,4 +65,6 @@ export const REJECTION_TEXT: Record<BuildRejection, string> = {
   crossing: 'Kreuzt eine Diagonale',
   'not-adjacent': 'Nicht benachbart',
   'out-of-bounds': 'Außerhalb der Karte',
+  building: 'Gebäude im Weg',
+  'wrong-side': 'Zufahrt liegt auf der anderen Seite',
 };
