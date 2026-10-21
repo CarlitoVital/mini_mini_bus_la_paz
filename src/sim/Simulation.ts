@@ -3,6 +3,8 @@ import {
   BUS_CAPACITY,
   BUSES_PER_HOUSE,
   DAY_LENGTH_S,
+  DAYS_PER_WEEK,
+  LIGHT_PHASE_S,
   MARKET_MAX_PINS,
   MARKET_OVERLOAD_PINS,
   MARKET_OVERLOAD_TIME_S,
@@ -37,6 +39,8 @@ export interface SimEvents {
   onDelivered?: (bus: Minibus) => void;
   onSpawn?: (kind: 'house' | 'market') => void;
   onOverflow?: (market: Market) => void;
+  /** Eine Woche ist vorbei (week = Nummer der neuen Woche, ab 2). */
+  onWeekEnd?: (week: number) => void;
 }
 
 /**
@@ -52,8 +56,14 @@ export class Simulation implements BusContext {
   readonly regions: ColorRegion[] = [];
   /** Freigeschaltete Farben. */
   colors = 0;
-  /** Wird true, sobald ein Markt überläuft (Game Over folgt in Phase 4). */
+  /** Wird true, sobald ein Markt überläuft → Game Over. */
   overflowed = false;
+  /** Der übergelaufene Markt (für Kamera/Hervorhebung beim Game Over). */
+  overflowMarket: Market | null = null;
+  /** Angehaltene Simulation (Game Over). */
+  halted = false;
+  /** Kreuzungs-Upgrades (vom Inventar bereitgestellt). */
+  junctionUpgrade: (node: NodeId) => 'roundabout' | 'light' | undefined = () => undefined;
 
   private readonly rand: () => number;
   private readonly spawner: Spawner;
@@ -97,8 +107,15 @@ export class Simulation implements BusContext {
   // Hauptschleife
   // ---------------------------------------------------------------------------
 
+  get week(): number {
+    return Math.floor(this.day / DAYS_PER_WEEK) + 1;
+  }
+
   update(dt: number): void {
+    if (this.halted) return;
+    const weekBefore = this.week;
     this.time += dt;
+    if (this.week > weekBefore) this.events.onWeekEnd?.(this.week);
     if (this.cacheVersion !== this.net.version) this.onNetworkChanged();
 
     if (this.autoSpawn) this.updateSpawning();
@@ -224,6 +241,7 @@ export class Simulation implements BusContext {
       m.overload = Math.min(1, m.overload + dt / MARKET_OVERLOAD_TIME_S);
       if (m.overload >= 1 && !this.overflowed) {
         this.overflowed = true;
+        this.overflowMarket = m;
         this.events.onOverflow?.(m);
       }
     } else {
@@ -352,6 +370,23 @@ export class Simulation implements BusContext {
 
   degree(node: NodeId): number {
     return this.net.degree(node);
+  }
+
+  junctionKind(node: NodeId): 'roundabout' | 'light' | undefined {
+    return this.junctionUpgrade(node);
+  }
+
+  /** Ampelphase einer Kreuzung: 0 = Ost-West hat Grün, 1 = Nord-Süd hat Grün. */
+  lightPhase(node: NodeId): 0 | 1 {
+    // Versatz je Knoten, damit nicht alle Ampeln synchron schalten
+    return (Math.floor(this.time / LIGHT_PHASE_S + (node % 5) * 0.37) % 2) as 0 | 1;
+  }
+
+  lightGreen(node: NodeId, from: NodeId): boolean {
+    const a = this.net.cellOf(from);
+    const b = this.net.cellOf(node);
+    const axis = Math.abs(b.cx - a.cx) >= Math.abs(b.cy - a.cy) ? 0 : 1;
+    return axis === this.lightPhase(node);
   }
 
   junctionOwner(node: NodeId): Minibus | undefined {

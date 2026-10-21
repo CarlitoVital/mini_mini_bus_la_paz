@@ -106,7 +106,7 @@ export class Spawner {
     const { net, reg } = this;
     if (c.cx < margin || c.cy < margin || c.cx >= net.cols - margin || c.cy >= net.rows - margin) return false;
     const id = net.id(c.cx, c.cy);
-    if (net.hasNode(id) || reg.isOccupied(id) || reg.isDriveway(id)) return false;
+    if (net.hasNode(id) || reg.isOccupied(id) || reg.isDriveway(id) || net.isUnderViaduct(id)) return false;
     return this.riverDistance({ x: (c.cx + 0.5) * CELL_SIZE, y: (c.cy + 0.5) * CELL_SIZE }) > RIVER_CLEARANCE;
   }
 

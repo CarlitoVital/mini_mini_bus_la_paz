@@ -5,6 +5,7 @@ import {
   BUS_BRAKE,
   BUS_LENGTH,
   LANE_OFFSET,
+  ROUNDABOUT_SPEED_FACTOR,
 } from '../config';
 import type { NodeId } from '../roads/RoadNetwork';
 import type { ColorId, House, Market } from './Buildings';
@@ -30,6 +31,10 @@ export interface BusContext {
   leaderGap(bus: Minibus): { gap: number; speed: number };
   /** Kreuzungsgrad eines Knotens. */
   degree(node: NodeId): number;
+  /** Kreuzungs-Upgrade (Kreisverkehr / Ampel) an einem Knoten. */
+  junctionKind(node: NodeId): 'roundabout' | 'light' | undefined;
+  /** Hat die Zufahrt from → node an einer Ampel gerade Grün? */
+  lightGreen(node: NodeId, from: NodeId): boolean;
   junctionOwner(node: NodeId): Minibus | undefined;
   setJunctionOwner(node: NodeId, bus: Minibus | undefined): void;
   /** Wird aufgerufen, sobald ein Bus das Ende seiner Route erreicht. */
@@ -194,15 +199,26 @@ export class Minibus {
       if (this.s > at + JUNCTION_RADIUS || ctx.degree(node) < 3) continue;
       const entry = at - JUNCTION_RADIUS;
       if (this.s < entry - 20) continue;
-      const owner = ctx.junctionOwner(node);
-      if (!owner || owner === this || !owner.isOnRoad || this.junctionWait > JUNCTION_PATIENCE_S) {
-        if (this.s >= entry - 2) {
-          ctx.setJunctionOwner(node, this);
-          this.heldJunctions.add(node);
+      const kind = ctx.junctionKind(node);
+      if (kind === 'roundabout') {
+        // Kreisverkehr: keine Reservierung, alle fahren gleichzeitig – aber langsam
+        if (this.s >= entry - 8) limit = Math.min(limit, BUS_BASE_SPEED * ROUNDABOUT_SPEED_FACTOR);
+      } else if (kind === 'light') {
+        // Ampel: bei Rot vor der Haltelinie warten; einmal drin, wird durchgefahren
+        if (this.s < entry - 1 && !ctx.lightGreen(node, route.nodes[i - 1])) {
+          limit = Math.min(limit, Math.max(0, (entry - 1 - this.s) * 2.5));
         }
       } else {
-        waiting = true;
-        limit = Math.min(limit, Math.max(0, (entry - this.s) * 2.5));
+        const owner = ctx.junctionOwner(node);
+        if (!owner || owner === this || !owner.isOnRoad || this.junctionWait > JUNCTION_PATIENCE_S) {
+          if (this.s >= entry - 2) {
+            ctx.setJunctionOwner(node, this);
+            this.heldJunctions.add(node);
+          }
+        } else {
+          waiting = true;
+          limit = Math.min(limit, Math.max(0, (entry - this.s) * 2.5));
+        }
       }
       break; // nur die nächste Kreuzung zählt
     }
