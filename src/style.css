@@ -524,6 +524,7 @@ kbd {
 .modal-backdrop {
   position: absolute;
   inset: 0;
+  z-index: 10;
   display: grid;
   place-items: center;
   padding: 16px;
