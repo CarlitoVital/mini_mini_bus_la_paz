@@ -18,6 +18,10 @@ export class Hud {
   private last = { score: -1, day: -1, frac: -1 };
 
   speed: SpeedSetting = 1;
+  /** Wird bei Klick auf Ton/Hilfe aufgerufen. */
+  onMute: () => void = () => {};
+  onHelp: () => void = () => {};
+  private readonly muteBtn: HTMLButtonElement;
 
   constructor(
     parent: HTMLElement,
@@ -42,13 +46,21 @@ export class Hud {
         <button data-speed="0" title="Pause (P)">❚❚</button>
         <button data-speed="1" title="Normal (1)">▶</button>
         <button data-speed="2" title="Schnell (2)">▶▶</button>
+      </div>
+      <div class="hud-extra">
+        <button class="hud-mute" title="Ton an/aus (M)" aria-label="Ton an/aus"></button>
+        <button class="hud-help" title="Steuerung anzeigen (H)" aria-label="Hilfe">?</button>
       </div>`;
     parent.appendChild(el);
     this.scoreEl = el.querySelector('.hud-score-value')!;
     this.dayEl = el.querySelector('.hud-day')!;
     this.weekEl = el.querySelector('.hud-week')!;
     this.ringEl = el.querySelector('.hud-ring')!;
-    this.buttons = [...el.querySelectorAll<HTMLButtonElement>('button')];
+    this.buttons = [...el.querySelectorAll<HTMLButtonElement>('.hud-speed button')];
+    this.muteBtn = el.querySelector('.hud-mute')!;
+    this.muteBtn.addEventListener('click', () => this.onMute());
+    el.querySelector('.hud-help')!.addEventListener('click', () => this.onHelp());
+    this.setMuted(false);
     for (const b of this.buttons) {
       b.addEventListener('click', () => this.setSpeed(Number(b.dataset.speed) as SpeedSetting));
     }
@@ -64,6 +76,13 @@ export class Hud {
       if (e.code === 'Digit2') this.setSpeed(2);
     });
     this.setSpeed(1);
+  }
+
+  setMuted(m: boolean): void {
+    this.muteBtn.innerHTML = m
+      ? '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6" class="stroke"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" class="stroke"/></svg>';
+    this.muteBtn.classList.toggle('muted', m);
   }
 
   setSpeed(s: SpeedSetting): void {

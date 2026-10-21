@@ -10,13 +10,15 @@ import { TerrainRenderer } from './TerrainRenderer';
 
 export interface RenderState {
   hoverCell: { cx: number; cy: number } | null;
+  /** Vorschau beim Platzieren eines Kreuzungs-Upgrades. */
+  placement?: { node: number; ok: boolean } | null;
 }
 
 /** Haupt-Renderer: verwaltet das Canvas (HiDPI) und zeichnet die Szene in Ebenen. */
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private terrain: TerrainRenderer;
-  private readonly roads: RoadRenderer;
+  readonly roads: RoadRenderer;
   readonly simRenderer: SimRenderer;
   private dpr = 1;
 
@@ -74,6 +76,7 @@ export class Renderer {
     this.roads.draw(ctx, camera.zoom);
     this.simRenderer.draw(ctx, camera.zoom);
     this.roads.drawPreview(ctx, this.tool, camera.zoom);
+    if (state.placement) this.roads.drawPlacement(ctx, state.placement.node, state.placement.ok);
 
     ctx.strokeStyle = COLORS.mapEdge;
     ctx.lineWidth = 1 / camera.zoom;

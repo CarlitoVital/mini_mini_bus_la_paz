@@ -30,6 +30,22 @@ export class SimRenderer {
     for (const h of sim.buildings.houses) this.drawHouse(ctx, h);
     for (const bus of sim.buses) if (bus.isOnRoad) this.drawBus(ctx, bus);
     for (const m of sim.buildings.markets) if (m.overload > 0) this.drawOverload(ctx, m, zoom);
+    if (sim.overflowMarket) this.drawOverflowHighlight(ctx, sim.overflowMarket, zoom);
+  }
+
+  /** Game Over: pulsierender roter Ring um den übergelaufenen Markt. */
+  private drawOverflowHighlight(ctx: CanvasRenderingContext2D, m: Market, zoom: number): void {
+    const cx = (m.origin.cx + 1) * CELL_SIZE;
+    const cy = (m.origin.cy + 1) * CELL_SIZE;
+    const t = (performance.now() / 1000) % 1.4;
+    for (const k of [0, 0.7]) {
+      const p = ((t + k) % 1.4) / 1.4;
+      ctx.strokeStyle = `rgba(217, 83, 79, ${0.8 * (1 - p)})`;
+      ctx.lineWidth = 3 / Math.min(1, zoom);
+      ctx.beginPath();
+      ctx.arc(cx, cy, CELL_SIZE * (1.2 + p * 1.6), 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   /** Kurzes Straßenstück vom Eingang zur Zufahrtsseite – zeigt, wo angeschlossen wird. */

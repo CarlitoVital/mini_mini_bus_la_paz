@@ -28,7 +28,7 @@ const THROTTLE: Partial<Record<SoundName, number>> = {
   erase: 0.05,
   blocked: 0.25,
   deliver: 0.07,
-  warning: 1.2,
+  warning: 2.5,
 };
 
 export class Sound {

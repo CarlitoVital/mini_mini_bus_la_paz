@@ -385,3 +385,334 @@ kbd {
     display: none;
   }
 }
+
+/* ---------- Phase 4: HUD-Extras ---------- */
+.hud-extra {
+  display: flex;
+  gap: 2px;
+}
+
+.hud-extra button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hud-extra button:hover,
+.hud-speed button:hover {
+  background: rgba(60, 45, 30, 0.08);
+}
+
+.hud-extra svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--ink);
+  vertical-align: middle;
+}
+
+.hud-extra svg .stroke {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.hud-mute.muted {
+  opacity: 0.55;
+}
+
+/* Steuerungshilfe: per "?" einblendbar */
+.hints {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  bottom: 88px;
+}
+
+.hints.visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- Inventar (unten mittig) ---------- */
+.inventory {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: var(--panel);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+.inv-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 12px 0 8px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(60, 45, 30, 0.06);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.inv-roundabout,
+.inv-light {
+  cursor: pointer;
+}
+
+.inv-roundabout:hover,
+.inv-light:hover {
+  background: rgba(60, 45, 30, 0.12);
+}
+
+.inv-item.selected {
+  background: var(--ink);
+  color: #fbf6ec;
+}
+
+.inv-item.empty {
+  opacity: 0.45;
+}
+
+.inv-item svg {
+  width: 28px;
+  height: 28px;
+}
+
+.inv-item .i-fill { fill: #6a645e; }
+.inv-item .i-line { stroke: #fff; stroke-width: 1.8; stroke-linecap: round; fill: none; }
+.inv-item .i-thick { stroke: #6a645e; stroke-width: 4; fill: none; }
+.inv-item .i-thick-thin { stroke: #6a645e; stroke-width: 3; fill: none; }
+.inv-item .i-line-dark { stroke: #8a7a6a; stroke-width: 1.6; fill: none; }
+.inv-item .i-ring { stroke: #6a645e; stroke-width: 4; fill: none; }
+.inv-item .i-box { fill: #3b332b; }
+.inv-item .i-red { fill: #ef5a4f; }
+.inv-item .i-amber { fill: #eea42b; }
+.inv-item .i-green { fill: #55d07a; }
+
+.inv-item.gain { animation: inv-gain 420ms ease; }
+.inv-item.spend .inv-count { animation: bump 200ms ease; }
+.inv-item.shake { animation: inv-shake 300ms ease; background: rgba(217, 83, 79, 0.25); }
+
+@keyframes inv-gain {
+  30% { transform: translateY(-6px) scale(1.08); background: rgba(85, 208, 122, 0.3); }
+}
+
+@keyframes inv-shake {
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+/* ---------- Dialoge ---------- */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(60, 45, 30, 0.28);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.modal-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal {
+  width: min(520px, 100%);
+  padding: 24px 26px 22px;
+  background: #fbf8f1;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(50, 35, 20, 0.3);
+  transform: translateY(10px) scale(0.98);
+  transition: transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.modal-backdrop.visible .modal {
+  transform: none;
+}
+
+.modal-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.modal-title {
+  margin: 4px 0 8px;
+  font-size: 24px;
+}
+
+.modal.alert .modal-title {
+  color: #b5403a;
+}
+
+.modal-body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.modal-body strong {
+  color: var(--ink);
+}
+
+.modal-body ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.modal-stats {
+  display: flex;
+  gap: 18px;
+  margin: 10px 0 2px;
+}
+
+.modal-stats div {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+
+.modal-stats b {
+  font-size: 26px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 12px 14px;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  background: rgba(60, 45, 30, 0.06);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.choice:hover,
+.choice:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--ink);
+  outline: none;
+}
+
+.choice-icon svg {
+  width: 44px;
+  height: 44px;
+}
+
+.choice-icon .i-fill { fill: #6a645e; }
+.choice-icon .i-line { stroke: #fff; stroke-width: 1.8; stroke-linecap: round; fill: none; }
+.choice-icon .i-thick { stroke: #6a645e; stroke-width: 4; fill: none; }
+.choice-icon .i-thick-thin { stroke: #6a645e; stroke-width: 3; fill: none; }
+.choice-icon .i-line-dark { stroke: #8a7a6a; stroke-width: 1.6; fill: none; }
+.choice-icon .i-ring { stroke: #6a645e; stroke-width: 4; fill: none; }
+.choice-icon .i-box { fill: #3b332b; }
+.choice-icon .i-red { fill: #ef5a4f; }
+.choice-icon .i-amber { fill: #eea42b; }
+.choice-icon .i-green { fill: #55d07a; }
+
+.choice-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.choice-text {
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.choice-key {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 11px;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.btn {
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(60, 45, 30, 0.08);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--ink);
+  color: #fbf6ec;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+#game.placing {
+  cursor: copy;
+}
+
+@media (max-width: 640px) {
+  .inventory {
+    bottom: 12px;
+    gap: 4px;
+    padding: 6px;
+  }
+  .inv-item {
+    height: 38px;
+    padding: 0 8px 0 6px;
+  }
+  .legend {
+    display: none;
+  }
+  .modal-choices {
+    grid-template-columns: 1fr;
+  }
+}

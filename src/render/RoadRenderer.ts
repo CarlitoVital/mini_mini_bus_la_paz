@@ -34,6 +34,11 @@ export class RoadRenderer {
   private path = new Path2D();
   private chevrons: Chevron[] = [];
   private builtVersion = -1;
+  private viaducts: { a: Vec2; b: Vec2; pillars: Vec2[] }[] = [];
+  /** Kreuzungs-Upgrade je Knoten (vom Inventar). */
+  upgradeAt: (node: NodeId) => 'roundabout' | 'light' | undefined = () => undefined;
+  /** Ampelphase je Knoten (von der Simulation). */
+  lightPhase: (node: NodeId) => 0 | 1 = () => 0;
 
   constructor(
     private readonly net: RoadNetwork,
@@ -85,11 +90,17 @@ export class RoadRenderer {
         count: gradeStatus(grade) === 'ok' ? 1 : 2,
       });
     }
+    this.viaducts = net.longEdges().map((e) => ({
+      a: net.centerOf(e.a),
+      b: net.centerOf(e.b),
+      pillars: net.spannedCells(e.a, e.b).map((c) => net.centerOf(c)),
+    }));
     this.builtVersion = net.version;
   }
 
   draw(ctx: CanvasRenderingContext2D, zoom: number): void {
     if (this.builtVersion !== this.net.version) this.rebuild();
+    this.drawViaductBase(ctx);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = COLORS.roadCasing;
@@ -98,8 +109,106 @@ export class RoadRenderer {
     ctx.strokeStyle = COLORS.road;
     ctx.lineWidth = ROAD_WIDTH;
     ctx.stroke(this.path);
+    this.drawViaductRails(ctx);
 
     if (zoom > 0.7) this.drawChevrons(ctx);
+    this.drawJunctionUpgrades(ctx);
+  }
+
+  /** Schlagschatten und Pfeiler unter Viadukten. */
+  private drawViaductBase(ctx: CanvasRenderingContext2D): void {
+    if (!this.viaducts.length) return;
+    ctx.lineCap = 'butt';
+    for (const v of this.viaducts) {
+      ctx.strokeStyle = 'rgba(40, 28, 18, 0.18)';
+      ctx.lineWidth = ROAD_WIDTH + 6;
+      ctx.beginPath();
+      ctx.moveTo(v.a.x + 3, v.a.y + 5);
+      ctx.lineTo(v.b.x + 3, v.b.y + 5);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(70, 58, 48, 0.75)';
+      for (const p of v.pillars) {
+        ctx.beginPath();
+        ctx.roundRect(p.x - 3, p.y - 1, 6, 8, 1.5);
+        ctx.fill();
+      }
+    }
+  }
+
+  /** Helle Geländer an beiden Seiten des Viadukts. */
+  private drawViaductRails(ctx: CanvasRenderingContext2D): void {
+    ctx.strokeStyle = '#f6f1e7';
+    ctx.lineWidth = 1.4;
+    ctx.lineCap = 'round';
+    for (const v of this.viaducts) {
+      const len = Math.hypot(v.b.x - v.a.x, v.b.y - v.a.y);
+      const ux = (v.b.x - v.a.x) / len;
+      const uy = (v.b.y - v.a.y) / len;
+      const off = ROAD_WIDTH / 2 + 1.2;
+      const inset = CELL_SIZE * 0.45;
+      ctx.beginPath();
+      for (const side of [-1, 1]) {
+        const nx = -uy * off * side;
+        const ny = ux * off * side;
+        ctx.moveTo(v.a.x + ux * inset + nx, v.a.y + uy * inset + ny);
+        ctx.lineTo(v.b.x - ux * inset + nx, v.b.y - uy * inset + ny);
+      }
+      ctx.stroke();
+    }
+  }
+
+  /** Kreisverkehre (Insel) und Ampeln (Phasenpunkte) auf Kreuzungen. */
+  private drawJunctionUpgrades(ctx: CanvasRenderingContext2D): void {
+    for (const node of this.net.nodes()) {
+      const kind = this.upgradeAt(node);
+      if (!kind) continue;
+      const c = this.net.centerOf(node);
+      if (kind === 'roundabout') {
+        ctx.fillStyle = COLORS.road;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, ROAD_WIDTH * 0.95, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#9cc58a';
+        ctx.strokeStyle = '#f6f1e7';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 4.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        const phase = this.lightPhase(node);
+        const r = ROAD_WIDTH * 0.62;
+        const dots: [number, number, 0 | 1][] = [
+          [r, 0, 0],
+          [-r, 0, 0],
+          [0, r, 1],
+          [0, -r, 1],
+        ];
+        ctx.fillStyle = 'rgba(30, 26, 22, 0.85)';
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        for (const [dx, dy, axis] of dots) {
+          ctx.fillStyle = axis === phase ? '#55d07a' : '#ef5a4f';
+          ctx.beginPath();
+          ctx.arc(c.x + dx, c.y + dy, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  /** Vorschau beim Platzieren eines Kreuzungs-Upgrades. */
+  drawPlacement(ctx: CanvasRenderingContext2D, node: NodeId, ok: boolean): void {
+    const c = this.net.centerOf(node);
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = ok ? STATUS_COLORS.ok : STATUS_COLORS.blocked;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, CELL_SIZE * 0.48, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   /** Kleine Pfeile "^" in Bergauf-Richtung (doppelt bei steilen Abschnitten). */
