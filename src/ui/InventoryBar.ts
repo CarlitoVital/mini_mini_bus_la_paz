@@ -35,8 +35,14 @@ export class InventoryBar {
       root.title = LABELS[kind];
       root.innerHTML = `${ICONS[kind]}<span class="inv-count">0</span>`;
       const selectable = kind === 'roundabout' || kind === 'light';
-      if (selectable) root.addEventListener('click', () => this.select(this.selected === kind ? null : kind));
-      else root.tabIndex = -1;
+      if (selectable) {
+        root.addEventListener('click', () => {
+          root.blur(); // sonst zeigt Chrome nach dem nächsten Tastendruck einen Fokusrahmen
+          this.select(this.selected === kind ? null : kind);
+        });
+      } else {
+        root.tabIndex = -1;
+      }
       this.el.appendChild(root);
       this.items.set(kind, { root, count: root.querySelector('.inv-count')!, last: -1 });
     }

@@ -62,7 +62,10 @@ export class Hud {
     el.querySelector('.hud-help')!.addEventListener('click', () => this.onHelp());
     this.setMuted(false);
     for (const b of this.buttons) {
-      b.addEventListener('click', () => this.setSpeed(Number(b.dataset.speed) as SpeedSetting));
+      b.addEventListener('click', () => {
+        b.blur();
+        this.setSpeed(Number(b.dataset.speed) as SpeedSetting);
+      });
     }
 
     this.toastEl = document.createElement('div');

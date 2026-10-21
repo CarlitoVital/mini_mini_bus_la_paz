@@ -717,3 +717,10 @@ kbd {
     grid-template-columns: 1fr;
   }
 }
+
+/* Fokusrahmen nur bei Tastaturbedienung */
+.inv-item:focus:not(:focus-visible),
+.hud button:focus:not(:focus-visible),
+.choice:focus:not(:focus-visible) {
+  outline: none;
+}
