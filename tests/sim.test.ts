@@ -205,7 +205,7 @@ describe('Spawning auf echter Karte', () => {
     const topo = new Topography(1548);
     const net = new RoadNetwork(topo.cols, topo.rows);
     const sim = new Simulation(topo, net, 1548);
-    run(sim, 200);
+    run(sim, 250);
     expect(sim.colors).toBeGreaterThanOrEqual(3);
     expect(sim.buildings.markets.length).toBeGreaterThanOrEqual(3);
     expect(sim.buildings.houses.length).toBeGreaterThanOrEqual(10);

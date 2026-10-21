@@ -6,6 +6,7 @@ import {
   MARKET_MAX_PINS,
   MARKET_OVERLOAD_PINS,
   MARKET_OVERLOAD_TIME_S,
+  NEW_COLOR_EVERY_DAYS,
 } from '../config';
 import { mulberry32 } from '../core/random';
 import type { NodeId, RoadNetwork } from '../roads/RoadNetwork';
@@ -22,7 +23,7 @@ export const COLOR_COUNT = 5;
 /** Spawn-Taktung in Sekunden (bei 1x). */
 const HOUSE_INTERVAL: [number, number] = [9, 15];
 const MARKET_INTERVAL_S = 75;
-const NEW_COLOR_INTERVAL_S = DAY_LENGTH_S * 2;
+const NEW_COLOR_INTERVAL_S = DAY_LENGTH_S * NEW_COLOR_EVERY_DAYS;
 const MAX_HOUSES = 60;
 /** Pin-Intervall pro Markt: startet bei PIN_INTERVAL_START, wird täglich kürzer. */
 const PIN_INTERVAL_START = 8;

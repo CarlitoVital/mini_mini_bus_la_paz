@@ -1,7 +1,8 @@
+import { VIADUCT_MAX_SPAN } from '../config';
 import type { Vec2 } from '../core/math';
 import type { Topography } from '../terrain/Topography';
 import { type Cell, type Edge, type NodeId, type RoadNetwork, cellsOnLine } from './RoadNetwork';
-import { type BuildCheck, type ConnectionRules, checkSegment } from './RoadRules';
+import { type BuildCheck, type ConnectionRules, checkSegment, checkViaduct } from './RoadRules';
 
 type Mode = 'idle' | 'build' | 'erase';
 
@@ -19,7 +20,7 @@ export interface BlockedPreview {
 }
 
 export interface RoadToolEvents {
-  onBuild?: (grade: number) => void;
+  onBuild?: (grade: number, viaduct: boolean) => void;
   onBlocked?: (check: BuildCheck) => void;
   onErase?: () => void;
 }
@@ -35,6 +36,8 @@ const MAX_UNDO = 50;
  * Ist der nächste Schritt zu steil, bleibt der Anker auf der letzten gültigen Zelle stehen
  * und eine rote Vorschau zeigt, wohin nicht gebaut werden kann. Der Spieler kann dann
  * entlang der Höhenlinien weiterziehen (Serpentine) – der Bau setzt automatisch fort.
+ * Zieht er stattdessen geradeaus über die steile Stelle weiter und besitzt ein Viadukt,
+ * wird automatisch ein Viadukt über 2–4 Zellen gespannt (z. B. über eine Quebrada).
  */
 export class RoadTool {
   mode: Mode = 'idle';
@@ -45,6 +48,8 @@ export class RoadTool {
   blocked: BlockedPreview | null = null;
   /** Steigung des zuletzt gebauten Segments (in Fahrtrichtung des Ziehens). */
   lastGrade: number | null = null;
+  /** true, wenn ein Weiterziehen in gerader Linie ein Viadukt ermöglichen könnte. */
+  viaductHint = false;
 
   private stroke: Stroke | null = null;
   private eraseLast: Cell | null = null;
@@ -104,7 +109,11 @@ export class RoadTool {
     const s = this.undoStack.pop();
     if (!s) return false;
     for (const e of s.added) this.net.removeEdge(e.a, e.b);
-    for (const e of s.removed) this.net.addEdge(e.a, e.b);
+    for (const e of s.removed) {
+      // Abgerissenes nur wiederherstellen, solange das Budget reicht
+      if (this.rules?.connectionRule(e.a, e.b) === 'no-tiles') break;
+      this.net.addEdge(e.a, e.b);
+    }
     return true;
   }
 
@@ -117,6 +126,7 @@ export class RoadTool {
     this.anchor = null;
     this.cursorNode = null;
     this.blocked = null;
+    this.viaductHint = false;
     this.stroke = null;
     this.eraseLast = null;
   }
@@ -132,26 +142,75 @@ export class RoadTool {
     }
     const wasBlocked = this.blocked;
     this.blocked = null;
-    for (const c of cellsOnLine(this.net.cellOf(this.anchor), target)) {
-      const next = this.net.id(c.cx, c.cy);
+    this.viaductHint = false;
+    const path = cellsOnLine(this.net.cellOf(this.anchor), target);
+    for (let i = 0; i < path.length; i++) {
+      const next = this.net.id(path[i].cx, path[i].cy);
       const check = checkSegment(this.topo, this.net, this.anchor, next, this.rules);
-      if (!check.ok) {
-        this.blocked = { from: this.anchor, to: next, check };
-        // Feedback nur beim Wechsel in den blockierten Zustand / auf ein neues Ziel auslösen
-        if (!wasBlocked || wasBlocked.to !== next || wasBlocked.from !== this.anchor) this.events.onBlocked?.(check);
-        return;
+      if (check.ok) {
+        this.commit(this.anchor, next, check.grade, false);
+        continue;
       }
-      if (this.net.addEdge(this.anchor, next)) {
-        this.stroke?.added.push(this.anchor < next ? { a: this.anchor, b: next } : { a: next, b: this.anchor });
-        this.events.onBuild?.(check.grade);
+      if (check.reason === 'too-steep' || check.reason === 'crossing') {
+        const end = this.tryViaduct(path, i);
+        if (end !== null) {
+          i = end;
+          continue;
+        }
       }
-      this.lastGrade = check.grade;
-      this.anchor = next;
+      this.blocked = { from: this.anchor, to: next, check };
+      // Feedback nur beim Wechsel in den blockierten Zustand / auf ein neues Ziel auslösen
+      if (!wasBlocked || wasBlocked.to !== next || wasBlocked.from !== this.anchor) this.events.onBlocked?.(check);
+      return;
     }
   }
 
+  /**
+   * Viadukt ab dem Anker in Richtung path[i], sofern der Cursor-Pfad mindestens zwei Zellen
+   * geradeaus weiterführt. Liefert den Pfadindex des Viadukt-Endes oder null.
+   */
+  private tryViaduct(path: Cell[], i: number): number | null {
+    const anchor = this.anchor!;
+    const a = this.net.cellOf(anchor);
+    const dx = path[i].cx - a.cx;
+    const dy = path[i].cy - a.cy;
+    let reach = 0;
+    for (let k = 1; k <= VIADUCT_MAX_SPAN && i + k - 1 < path.length; k++) {
+      const c = path[i + k - 1];
+      if (c.cx !== a.cx + dx * k || c.cy !== a.cy + dy * k) break;
+      reach = k;
+    }
+    const available = this.rules?.viaductsAvailable?.() ?? 0;
+    for (let k = 2; k <= reach; k++) {
+      const b = { cx: a.cx + dx * k, cy: a.cy + dy * k };
+      if (!this.net.inBounds(b)) break;
+      const end = this.net.id(b.cx, b.cy);
+      const check = checkViaduct(this.topo, this.net, anchor, end, this.rules);
+      if (check.ok) {
+        this.commit(anchor, end, check.grade, true);
+        return i + k - 1;
+      }
+    }
+    if (available > 0 && reach < VIADUCT_MAX_SPAN) this.viaductHint = true;
+    return null;
+  }
+
+  private commit(a: NodeId, b: NodeId, grade: number, viaduct: boolean): void {
+    if (this.net.addEdge(a, b)) {
+      this.stroke?.added.push(a < b ? { a, b } : { a: b, b: a });
+      this.events.onBuild?.(grade, viaduct);
+    }
+    this.lastGrade = grade;
+    this.anchor = b;
+  }
+
   private eraseCell(c: Cell): void {
-    const removed = this.net.removeNode(this.net.id(c.cx, c.cy));
+    const id = this.net.id(c.cx, c.cy);
+    const removed = this.net.removeNode(id);
+    // Viadukte, die über diese Zelle führen, ebenfalls abreißen
+    for (const e of this.net.longEdges()) {
+      if (this.net.spannedCells(e.a, e.b).includes(id) && this.net.removeEdge(e.a, e.b)) removed.push(e);
+    }
     if (removed.length) {
       this.stroke?.removed.push(...removed);
       this.events.onErase?.();

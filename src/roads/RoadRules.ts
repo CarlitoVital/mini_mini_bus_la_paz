@@ -1,14 +1,26 @@
-import { MAX_ALLOWED_SLOPE, METERS_PER_WU, SLOPE_WARN_RATIO } from '../config';
+import { MAX_ALLOWED_SLOPE, METERS_PER_WU, SLOPE_WARN_RATIO, VIADUCT_MAX_SPAN } from '../config';
 import type { Topography } from '../terrain/Topography';
 import type { NodeId, RoadNetwork } from './RoadNetwork';
 
 export type GradeStatus = 'ok' | 'steep' | 'blocked';
 
-export type BuildRejection = 'too-steep' | 'crossing' | 'not-adjacent' | 'out-of-bounds' | 'building' | 'wrong-side';
+export type BuildRejection =
+  | 'too-steep'
+  | 'crossing'
+  | 'not-adjacent'
+  | 'out-of-bounds'
+  | 'building'
+  | 'wrong-side'
+  | 'no-tiles'
+  | 'no-viaduct';
 
-/** Zusätzliche Anschlussregeln (z. B. Gebäude); null = erlaubt. */
+/** Zusätzliche Anschlussregeln (z. B. Gebäude, Budget); null = erlaubt. */
 export interface ConnectionRules {
   connectionRule(a: NodeId, b: NodeId): BuildRejection | null;
+  /** Wie viele Viadukte sind noch verfügbar? (fehlt = keine) */
+  viaductsAvailable?(): number;
+  /** Liegt auf dieser Zelle ein Gebäude? (Viadukte dürfen nicht über Gebäude führen) */
+  isBlockedCell?(id: NodeId): boolean;
 }
 
 export interface BuildCheck {
@@ -60,6 +72,37 @@ export function checkSegment(
   return { ok: true, grade };
 }
 
+/**
+ * Prüft ein Viadukt a–b: gerade Linie (orthogonal/diagonal) über 2..VIADUCT_MAX_SPAN Zellen,
+ * Steigung zwischen den Endpunkten ≤ MAX_ALLOWED_SLOPE – die Zellen dazwischen dürfen beliebig
+ * steil oder tief sein (Quebrada). Keine Gebäude unter dem Viadukt.
+ */
+export function checkViaduct(
+  topo: Topography,
+  net: RoadNetwork,
+  a: NodeId,
+  b: NodeId,
+  rules?: ConnectionRules,
+): BuildCheck {
+  const ca = net.cellOf(a);
+  const cb = net.cellOf(b);
+  const dx = cb.cx - ca.cx;
+  const dy = cb.cy - ca.cy;
+  const span = Math.max(Math.abs(dx), Math.abs(dy));
+  const straight = dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy);
+  if (span < 2 || span > VIADUCT_MAX_SPAN || !straight || !net.inBounds(cb)) {
+    return { ok: false, grade: 0, reason: 'not-adjacent' };
+  }
+  const grade = segmentGrade(topo, net, a, b);
+  if (net.hasEdge(a, b)) return { ok: true, grade };
+  if ((rules?.viaductsAvailable?.() ?? 0) <= 0) return { ok: false, grade, reason: 'no-viaduct' };
+  if (net.spannedCells(a, b).some((c) => rules?.isBlockedCell?.(c))) return { ok: false, grade, reason: 'building' };
+  const ruleViolation = rules?.connectionRule(a, b);
+  if (ruleViolation) return { ok: false, grade, reason: ruleViolation };
+  if (Math.abs(grade) > MAX_ALLOWED_SLOPE) return { ok: false, grade, reason: 'too-steep' };
+  return { ok: true, grade };
+}
+
 export const REJECTION_TEXT: Record<BuildRejection, string> = {
   'too-steep': 'Zu steil! Serpentine nötig',
   crossing: 'Kreuzt eine Diagonale',
@@ -67,4 +110,6 @@ export const REJECTION_TEXT: Record<BuildRejection, string> = {
   'out-of-bounds': 'Außerhalb der Karte',
   building: 'Gebäude im Weg',
   'wrong-side': 'Zufahrt liegt auf der anderen Seite',
+  'no-tiles': 'Keine Straßenteile mehr',
+  'no-viaduct': 'Kein Viadukt verfügbar',
 };

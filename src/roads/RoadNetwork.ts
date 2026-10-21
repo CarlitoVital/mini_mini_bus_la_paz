@@ -58,6 +58,38 @@ export class RoadNetwork {
     return a !== b && dx <= 1 && dy <= 1;
   }
 
+  /** Viadukt-Kante: überspannt mehr als eine Zelle (Chebyshev-Abstand > 1). */
+  isLong(a: NodeId, b: NodeId): boolean {
+    const ca = this.cellOf(a);
+    const cb = this.cellOf(b);
+    return Math.max(Math.abs(ca.cx - cb.cx), Math.abs(ca.cy - cb.cy)) > 1;
+  }
+
+  /** Zellen, die ein Viadukt a–b überspannt (ohne Endpunkte). */
+  spannedCells(a: NodeId, b: NodeId): NodeId[] {
+    const ca = this.cellOf(a);
+    const cb = this.cellOf(b);
+    const n = Math.max(Math.abs(cb.cx - ca.cx), Math.abs(cb.cy - ca.cy));
+    const out: NodeId[] = [];
+    for (let i = 1; i < n; i++) {
+      out.push(this.id(ca.cx + (Math.sign(cb.cx - ca.cx) * i), ca.cy + Math.sign(cb.cy - ca.cy) * i));
+    }
+    return out;
+  }
+
+  /** Alle Viadukt-Kanten. */
+  longEdges(): Edge[] {
+    const out: Edge[] = [];
+    for (const e of this.edges()) if (this.isLong(e.a, e.b)) out.push(e);
+    return out;
+  }
+
+  /** Liegt die Zelle unter einem Viadukt? */
+  isUnderViaduct(id: NodeId): boolean {
+    for (const e of this.longEdges()) if (this.spannedCells(e.a, e.b).includes(id)) return true;
+    return false;
+  }
+
   /** Horizontale Länge einer Kante in World Units. */
   edgeLength(a: NodeId, b: NodeId): number {
     const ca = this.cellOf(a);

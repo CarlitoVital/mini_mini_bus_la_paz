@@ -92,3 +92,23 @@ export const MARKET_OVERLOAD_PINS = 8;
 export const MARKET_OVERLOAD_TIME_S = 45;
 /** Maximal angezeigte/angesammelte Pins pro Markt. */
 export const MARKET_MAX_PINS = 12;
+
+// ---------------------------------------------------------------------------
+// Spielablauf & Ressourcen (Phase 4)
+// ---------------------------------------------------------------------------
+
+/** Tage pro Woche – am Wochenende gibt es Belohnungen. */
+export const DAYS_PER_WEEK = 7;
+/** Alle so viele Tage kommt eine neue Linienfarbe hinzu. */
+export const NEW_COLOR_EVERY_DAYS = 3;
+/** Straßenteile (1 Teil = 1 Straßenzelle) zu Spielbeginn und als Wochenbelohnung. */
+export const START_ROAD_TILES = 45;
+export const WEEKLY_ROAD_TILES = 25;
+/** Viadukte zu Spielbeginn. */
+export const START_VIADUCTS = 1;
+/** Max. Spannweite eines Viadukts in Zellen (gerade Linie, orthogonal oder diagonal). */
+export const VIADUCT_MAX_SPAN = 4;
+/** Dauer einer Ampelphase in Sekunden. */
+export const LIGHT_PHASE_S = 3.5;
+/** Tempolimit im Kreisverkehr (Anteil der Grundgeschwindigkeit). */
+export const ROUNDABOUT_SPEED_FACTOR = 0.55;
