@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini Minibuses: La Paz</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='9' width='26' height='15' rx='5' fill='%23e8a33d'/><rect x='3' y='15' width='26' height='3' fill='%233a7bbf'/><circle cx='10' cy='25' r='3' fill='%23333'/><circle cx='22' cy='25' r='3' fill='%23333'/></svg>" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+      <header class="title-card">
+        <h1>Mini Minibuses</h1>
+        <p>La Paz &amp; El Alto · <span class="muted">Seed <span id="seed"></span></span></p>
+        <div class="stats" id="stats"></div>
+      </header>
+      <aside class="hints">
+        <span><kbd>Linksklick</kbd>+Ziehen Straße bauen</span>
+        <span><kbd>Rechtsklick</kbd>+Ziehen Abreißen</span>
+        <span><kbd>Strg+Z</kbd> Rückgängig</span>
+        <span><kbd>Mausrad</kbd> Zoom</span>
+        <span><kbd>Mittlere Taste</kbd> / <kbd>Leertaste</kbd>+Ziehen Verschieben</span>
+        <span><kbd>WASD</kbd> Kamera</span>
+        <span><kbd>P</kbd> / <kbd>1</kbd> / <kbd>2</kbd> Pause / Tempo</span>
+        <span><kbd>N</kbd> Neue Karte</span>
+      </aside>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "mini-minibuses-la-paz",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mini Minibuses: La Paz Edition – minimalistisches Verkehrs-Strategiespiel im Stil von Mini Motorways",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}
